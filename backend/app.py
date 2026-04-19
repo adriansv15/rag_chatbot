@@ -1,6 +1,6 @@
 import os
 import uuid
-from typing import Optional
+from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
@@ -9,6 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from huggingface_hub import AsyncInferenceClient
 import chromadb
+from chromadb.api.types import Metadata
+
+from processing import extract_text_from_file
 
 load_dotenv()
 
@@ -151,37 +154,84 @@ async def delete_history(session_id: str):
 
 @app.post("/chat")
 async def chat_endpoint(
-    message: str = Form(...), 
-    session_id: str = Form(...), 
-    file: Optional[UploadFile] = File(None)
+    message: str = Form(...),
+    session_id: str = Form(...),
+    files: Optional[List[UploadFile]] = File(None)
 ):
-    # 1. Handle the uploaded text file
     uploaded_text = ""
-    if file:
-        # Read and decode the text file
-        bytes_content = await file.read()
-        uploaded_text = bytes_content.decode("utf-8")
 
-      # Pass BOTH the message and the uploaded text to your RAG function
+    # Handle multiple uploaded files
+    if files:
+        for f in files:
+            content = await f.read()
+            filename = f.filename or "unknown"
+            try:
+                text = extract_text_from_file(filename, content)
+            except UnicodeDecodeError:
+                text = ""  # ignore non-text files
+            uploaded_text += "\n" + text
+
+    # Stream the RAG response
     return StreamingResponse(
-        get_rag_response(message, session_id, uploaded_text), 
+        get_rag_response(message, session_id, uploaded_text),
         media_type="text/plain"
     )
 
+
+MAX_TOTAL_SIZE = 1 * 1024 * 1024  # 1MB total
+
 @app.post("/ingest")
-async def ingest_file(file: UploadFile = File(...)):
-    # 1. Read and decode the text
-    content = await file.read()
-    text = content.decode("utf-8")
-    
-    # 2. Basic Chunking (Simple example)
-    chunks = [text[i:i+1000] for i in range(0, len(text), 1000)]
-    
-    # 3. Add to your Vector DB
-    ids = [str(uuid.uuid4()) for _ in chunks]
-    collection.add(documents=chunks, ids=ids, metadatas=[{"source": file.filename}] * len(chunks))
-    
-    return {"message": f"Successfully ingested {len(chunks)} chunks from {file.filename}"}
+async def ingest_files(files: List[UploadFile] = File(...)):
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+
+    # 1. Enforce total size limit
+    total_size = 0
+    file_contents = []
+
+    for f in files:
+        filename = f.filename or "unknown"
+        content = await f.read()
+        total_size += len(content)
+
+        if total_size > MAX_TOTAL_SIZE:
+            raise HTTPException(
+                status_code=400,
+                detail="Total uploaded file size exceeds 1MB"
+            )
+
+        # Decode text
+        try:
+            text = extract_text_from_file(filename, content)
+        except UnicodeDecodeError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File '{f.filename}' is not valid UTF‑8 text"
+            )
+
+        file_contents.append((f.filename, text))
+
+    # 2. Chunk and ingest each file
+    total_chunks = 0
+
+    for filename, text in file_contents:
+        chunks = [text[i:i+1000] for i in range(0, len(text), 1000)]
+        ids = [str(uuid.uuid4()) for _ in chunks]
+        metadatas: List[Metadata] = [
+            {"source": filename} for _ in chunks
+        ]
+
+        collection.add(
+            documents=chunks,
+            ids=ids,
+            metadatas=metadatas,
+        )
+
+        total_chunks += len(chunks)
+
+    return {
+        "message": f"Successfully ingested {total_chunks} chunks from {len(files)} files"
+    }
 
 @app.get("/rag/files")
 async def list_rag_files():
