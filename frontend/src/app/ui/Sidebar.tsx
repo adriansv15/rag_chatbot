@@ -9,12 +9,14 @@ interface SidebarProps {
   currentSessionId: string | null;
 }
 
+const NEXT_PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export default function Sidebar({ onNewChat, onClearChat, onSelectSession, currentSessionId }: SidebarProps) {
   const [sessionList, setSessionList] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchSessions = async () => {
-      const res = await fetch("http://localhost:8000/sessions");
+      const res = await fetch(`${NEXT_PUBLIC_API_URL}/sessions`);
       const data = await res.json();
       setSessionList(data.sessions);
     };

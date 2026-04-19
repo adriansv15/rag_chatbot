@@ -3,13 +3,15 @@ import { useState, useEffect } from "react";
 import Sidebar from "./ui/sidebar"; // Assuming your sidebar is a component
 import Chat, { Message } from "./ui/chat"; 
 
+const NEXT_PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export default function Page() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
 
   // 1. Logic to start a fresh session
   const startNewChat = async () => {
-    const res = await fetch("http://localhost:8000/new-session");
+    const res = await fetch(`${NEXT_PUBLIC_API_URL}/new-session`);
     const data = await res.json();
     localStorage.setItem("chat_session_id", data.session_id);
     setSessionId(data.session_id);
@@ -19,7 +21,7 @@ export default function Page() {
   // 2. Logic to clear current session history
   const clearCurrentChat = async () => {
     if (!sessionId) return;
-    await fetch(`http://localhost:8000/clear-history/${sessionId}`, { method: "DELETE" });
+    await fetch(`${NEXT_PUBLIC_API_URL}/clear-history/${sessionId}`, { method: "DELETE" });
     setMessages([]);
   };
 
@@ -28,7 +30,7 @@ export default function Page() {
     localStorage.setItem("chat_session_id", id);
     
     // Fetch the history for this specific ID
-    const res = await fetch(`http://localhost:8000/history/${id}`);
+    const res = await fetch(`${NEXT_PUBLIC_API_URL}/history/${id}`);
     const data = await res.json();
     setMessages(data.history || []);
   };
@@ -38,7 +40,7 @@ export default function Page() {
     const init = async () => {
       let id = localStorage.getItem("chat_session_id");
       if (id) {
-        const res = await fetch(`http://localhost:8000/history/${id}`);
+        const res = await fetch(`${NEXT_PUBLIC_API_URL}/history/${id}`);
         const data = await res.json();
         setMessages(data.history || []);
         setSessionId(id);

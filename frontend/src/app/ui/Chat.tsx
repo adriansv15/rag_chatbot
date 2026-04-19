@@ -14,6 +14,8 @@ export interface ChatProps {
   sessionId: string | null;
 }
 
+const NEXT_PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export default function Chat({ messages, setMessages, sessionId }: ChatProps) {
     const [input, setInput] = useState("");
     const [files, setFiles] = useState<File[]>([]);
@@ -71,7 +73,7 @@ export default function Chat({ messages, setMessages, sessionId }: ChatProps) {
 
         
 
-        const response = await fetch("http://localhost:8000/chat", {
+        const response = await fetch(`${NEXT_PUBLIC_API_URL}/chat`, {
             method: "POST",
             body: formData,
         });
@@ -134,7 +136,7 @@ export default function Chat({ messages, setMessages, sessionId }: ChatProps) {
       const formData = new FormData();
       files.forEach(f => formData.append("files", f));
 
-      const response = await fetch("http://localhost:8000/ingest", {
+      const response = await fetch(`${NEXT_PUBLIC_API_URL}/ingest`, {
         method: "POST",
         body: formData,
       });
@@ -154,7 +156,7 @@ export default function Chat({ messages, setMessages, sessionId }: ChatProps) {
       formData.append("files", file);
 
       try {
-        const response = await fetch("http://localhost:8000/ingest", {
+        const response = await fetch(`${NEXT_PUBLIC_API_URL}/ingest`, {
           method: "POST",
           body: formData,
         });
