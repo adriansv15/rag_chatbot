@@ -18,14 +18,14 @@ load_dotenv()
 # Access the variable
 api_key = os.getenv("HF_API_KEY")
 api_url = os.getenv("API_URL")
-
+frontend_url = os.getenv("REACT_APP_PUBLIC_URL")
 
 app = FastAPI()
 
 # Enable CORS for Next.js
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[frontend_url],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -33,7 +33,7 @@ app.add_middleware(
 # 1. Initialize your local RAG components once
 client = AsyncInferenceClient(api_key=api_key)
 chroma_client = chromadb.PersistentClient(path="./my_vector_db")
-collection = chroma_client.get_collection(name="my_knowledge_base")
+collection = chroma_client.get_or_create_collection(name="my_knowledge_base")
 # Create a dedicated collection for chat history
 history_collection = chroma_client.get_or_create_collection(name="chat_history")
 
@@ -96,7 +96,7 @@ async def get_rag_response(query: str, session_id: str, uploaded_text: str):
             if content:
                 full_response += content
                 yield content
-    
+
         # 4. Save the NEW interaction to ChromaDB after streaming finishes
     history_collection.add(
         ids=[f"{session_id}_user_{len(past_chats['ids'])}", f"{session_id}_ai_{len(past_chats['ids'])}"],
